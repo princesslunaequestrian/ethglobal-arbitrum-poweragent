@@ -21,13 +21,14 @@ contract wrappedEthAcquirer is Ownable (0xb17f6e542373E5662a37E8c354377Be2eecfBA
     address public AGENT; //0xad1e507f8a0cb1b91421f3bb86bbe29f001cbcc6
     address public immutable WSTETH; //0x5979D7b546E38E414F7E9822514be443A4800529
     bytes32 public immutable balPoolId; //0x9791d590788598535278552eecd4b211bfc790cb000000000000000000000498
+    address public immutable BALANCERQUERY; //0xE39B5e3B6D74016b2F6A9673D7d7493B6DF549d5 
     address public secondStage;
     mapping(address=>bool) public secondStageCallingPermissions;
 
     event registered(address indexed stable, uint256 indexed thresh, uint256 indexed amtStableSell, address owner);
     event updatedParams(address indexed stable, uint256 indexed thresh, uint256 indexed amtStableSell, address owner);
 
-    constructor(address _secondStage, address _WETH, address _WSTETH, bytes32 _balPoolId, address vault, address reader, address router, address agent, address balvault){
+    constructor(address _secondStage, address _WETH, address _WSTETH, bytes32 _balPoolId, address vault, address reader, address router, address agent, address balvault, address balancerquery){
         secondStage = _secondStage;
         WETH = _WETH;
         WSTETH = _WSTETH;
@@ -37,6 +38,7 @@ contract wrappedEthAcquirer is Ownable (0xb17f6e542373E5662a37E8c354377Be2eecfBA
         VAULT = vault;
         AGENT = agent;
         BALVAULT = balvault;
+        BALANCERQUERY = balancerquery;
     }
 
     function replenish(address token, uint256 amt) public {
@@ -105,11 +107,12 @@ contract wrappedEthAcquirer is Ownable (0xb17f6e542373E5662a37E8c354377Be2eecfBA
                 payable(address(this)),
                 false
             );
+            IERC20(WETH).approve(BALVAULT, type(uint256).max);
             uint256 prevWsteth = IERC20(WSTETH).balanceOf(address(this));
             ISwapper(BALVAULT).swap(
                 swapdata,
                 fm,
-                userBalances[_for][WETH],
+                (IBalancerQueries(BALANCERQUERY).querySwap(swapdata, fm)*80)/100,
                 block.timestamp + 1800
             );
             uint256 postWsteth = IERC20(WSTETH).balanceOf(address(this));
@@ -130,13 +133,14 @@ contract wrappedEthAcquirer is Ownable (0xb17f6e542373E5662a37E8c354377Be2eecfBA
             param.amtStableSell
         );
         //adjust for slippage
-        uint256 admissible = (afterFees*95)/100;
+        uint256 admissible = (afterFees*80)/100;
         drawAdditional(_for);
         //swap
         address [] memory path = new address[](2);
         path[0] = param.stable;
         path[1] = WETH;
         uint256 prevWeth = IERC20(WETH).balanceOf(address(this));
+        IERC20(param.stable).approve(ROUTER, type(uint256).max);
         IRouter(ROUTER).swap(
             path, param.amtStableSell, admissible, address(this)
         );
