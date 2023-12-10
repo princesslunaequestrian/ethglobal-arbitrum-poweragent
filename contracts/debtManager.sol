@@ -21,10 +21,10 @@ contract debtManager is Ownable(0xb17f6e542373E5662a37E8c354377Be2eecfBA82){
     address public AAVEPOOL;
     address public AGENT;
     address public immutable WSTETH;
-    address public immutable USDC;
+    address public constant USDC = 0xaf88d065e77c8cC2239327C5EDb3A432268e5831;
     address public UNDERLYINGBAL;
-    address public RPDW; //0x6b02fEFd2F2e06f51E17b7d5b8B20D75fd6916be
-    bytes32 public immutable dolaPoolBytesId; //0x8bc65eed474d1a00555825c91feab6a8255c2107000000000000000000000453
+    address public constant RPDW =0x6b02fEFd2F2e06f51E17b7d5b8B20D75fd6916be;
+    bytes32 public constant dolaPoolBytesId = 0x8bc65eed474d1a00555825c91feab6a8255c2107000000000000000000000453;
     address public DOLA;
     address public dolaPoolToken;
     address public poolREwardPool;
@@ -35,7 +35,7 @@ contract debtManager is Ownable(0xb17f6e542373E5662a37E8c354377Be2eecfBA82){
     address[] public users;
     
 
-    constructor (address wsteth_source, address ub, address aavepool, address wsteth, address usdc, address dola, bytes32 dolapoolid, uint256 hf, address rpdw, address prp, address dpt, uint256 uhf, address agent, address bq){
+    constructor (address wsteth_source, address ub, address aavepool, address wsteth, address dola, uint256 hf, address prp, address dpt, uint256 uhf, address agent, address bq){
         WSTETH = wsteth;
         UNDERLYINGBAL = ub;
         AGENT = agent;
@@ -43,13 +43,10 @@ contract debtManager is Ownable(0xb17f6e542373E5662a37E8c354377Be2eecfBA82){
         WSTETH_SOURCE = wsteth_source;
         AAVEPOOL = aavepool;
         dolaPoolToken = dpt;
-        USDC = usdc;
         poolREwardPool = prp;
-        dolaPoolBytesId = dolapoolid;
         DOLA = dola;
         HFWEI = hf;
         UPPERHFWEI = uhf;
-        RPDW = rpdw;
     }
 
 
@@ -93,17 +90,29 @@ contract debtManager is Ownable(0xb17f6e542373E5662a37E8c354377Be2eecfBA82){
 
     //if hf is too low
     function securePosition() public { 
-        require(msg.sender == AGENT, "Only agnet"){
+        require(msg.sender == AGENT, "Only agnet");
             (uint256 collateral, uint256 debt, uint256 available,,,uint256 healthfactor) = IPool(AAVEPOOL).getUserAccountData(address(this));
             //we need to redeem debt - collaterisation/targetHf
             uint256 toRedeem = debt - (collateral*1e18)/HFWEI; //feeds are in usd
             IRewardPool4626(poolREwardPool).withdrawAndUnwrap(toRedeem, false);
             //now unwrap in balancer
             (,uint256[] memory quotes) = IBalancerQueries(balancerQuery).queryExit(dolaPoolBytesId, address(this), address(this), 
-        abi.encode(uint256(0), IERC20(dolaPoolToken).balanceOf(address(this)), uint256(2)));
+        abi.encode(uint256(0), IERC20(dolaPoolToken).balanceOf(address(this))/10000, uint256(2)));
             uint256 quoteUsdc = quotes[2];
-            IBalancerVault(UNDERLYINGBAL).exitPool(dolaPoolBytesId, address(this), address(this), )
-            
+            IBalancerVault(UNDERLYINGBAL).exitPool(dolaPoolBytesId, address(this), payable(address(this)),  abi.encode(uint256(0), (quoteUsdc*9)/10, uint256(2)));
+            //repay part of debt
+            IPool(AAVEPOOL).repay(USDC, toRedeem, 2, address(this));
+            //position is now secure
+        
+    }
+
+    function shouldIRebalance() public view returns (bool flag, bytes memory cdata){
+        (uint256 collateral, uint256 debt, uint256 available,,,uint256 healthfactor) = IPool(AAVEPOOL).getUserAccountData(address(this));
+        if (healthfactor < HFWEI){
+            return (true, abi.encodeWithSelector(this.securePosition.selector));
+        }
+        else {
+            return (false, abi.encodeWithSelector(this.securePosition.selector));
         }
     }
 

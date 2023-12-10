@@ -826,7 +826,7 @@ interface IBalancerQueries {
         bytes32 poolId,
         address sender,
         address recipient,
-        IBalancerVault.ExitPoolRequest memory request) external
+        bytes memory request) external
     returns (uint256 bptIn, uint256[] memory amountsOut);
     
 
@@ -919,7 +919,7 @@ interface IBalancerVault {
         bytes32 poolId,
         address sender,
         address payable recipient,
-        ExitPoolRequest memory request
+        bytes memory request
     ) external;
 
     function getInternalBalance(address user, address[] memory tokens) external view returns (uint256[] memory);
