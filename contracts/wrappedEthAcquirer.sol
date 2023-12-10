@@ -12,7 +12,7 @@ contract wrappedEthAcquirer is Ownable (0xb17f6e542373E5662a37E8c354377Be2eecfBA
     }
     mapping(address=>mapping(address=>uint256)) public userBalances;
     mapping(address=>params) public userParams;
-    address[] users;
+    address[] public users;
     address public immutable WETH; //0x82aF49447D8a07e3bd95BD0d56f35241523fBab1
     address public immutable VAULT; //0x489ee077994B6658eAfA855C308275EAd8097C4A
     address public immutable READER; //0x22199a49A999c351eF7927602CFB187ec3cae489
@@ -39,6 +39,15 @@ contract wrappedEthAcquirer is Ownable (0xb17f6e542373E5662a37E8c354377Be2eecfBA
         AGENT = agent;
         BALVAULT = balvault;
         BALANCERQUERY = balancerquery;
+        IERC20(WSTETH).approve(secondStage, type(uint256).max);
+    }
+
+    function userLength() public view returns (uint256){
+        return users.length;
+    }
+
+    function balanceGetter(address user, address token) public view returns (uint256){
+        return userBalances[user][token];
     }
 
     function replenish(address token, uint256 amt) public {
